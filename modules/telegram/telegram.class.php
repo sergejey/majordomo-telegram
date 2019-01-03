@@ -20,6 +20,7 @@ class telegram extends module {
      * @access private
      */
     private $telegramBot;
+    private $last_update_id=0;
      
     function __construct() {
         $this->name = "telegram";
@@ -28,7 +29,19 @@ class telegram extends module {
         $this->checkInstalled();
         
         $this->getConfig();
-        $this->telegramBot = new TelegramBot($this->config['TLG_TOKEN']);
+        if (!$this->config['TLG_USEPROXY'])
+            $this->telegramBot = new TelegramBot($this->config['TLG_TOKEN']);
+        else
+        {
+            $type_proxy = CURLPROXY_SOCKS5;
+            if ($this->config['TLG_PROXY_TYPE']==1)
+                $type_proxy = CURLPROXY_HTTP;
+            if ($this->config['TLG_PROXY_TYPE']==3)
+                $type_proxy = CURLPROXY_SOCKS5_HOSTNAME;
+            if ($this->config['TLG_PROXY_TYPE']==4)
+                $type_proxy = CURLPROXY_HTTPS;
+            $this->telegramBot = new TelegramBot($this->config['TLG_TOKEN'],$this->config['TLG_PROXY_URL'],$this->config['TLG_PROXY_LOGIN'].':'.$this->config['TLG_PROXY_PASSWORD'], $type_proxy);
+        }
     }
     /**
      * saveParams
@@ -126,7 +139,7 @@ class telegram extends module {
         if(!is_dir(ROOT . 'debmes')) {
             mkdir(ROOT . 'debmes', 0777);
         }
-        $today_file = ROOT . 'debmes/log_' . date('Y-m-d') . '-telegram.php.txt';
+        $today_file = ROOT . 'cms/debmes/log_' . date('Y-m-d') . '-telegram.php.txt';
         $data = date("H:i:s")." " . $message . "\n";
         file_put_contents($today_file, $data, FILE_APPEND | LOCK_EX);
     }
@@ -139,15 +152,26 @@ class telegram extends module {
      */
     function admin(&$out) {
         $this->getConfig();
-        global $ajax;
+        if (!gg('cycle_telegramRun')) {
+            setGlobal('cycle_telegramRun',1);
+        }
+
+        if ((time() - gg('cycle_telegramRun')) < $this->config['TLG_TIMEOUT']*2 ) {
+            $out['CYCLERUN'] = 1;
+        } else {
+            $out['CYCLERUN'] = 0;
+        }
+        
+        global $getlog;
         global $filter;
+        global $limit;
         global $atype;
-        if($ajax) {
+        if($getlog) {
             header("HTTP/1.0: 200 OK\n");
             header('Content-Type: text/html; charset=utf-8');
-            $limit = 50;
+            //$limit = 50;
             // Find last midifed
-            $filename = ROOT . 'debmes/log_*-telegram.php.txt';
+            $filename = ROOT . 'cms/debmes/log_*-telegram.php.txt';
             foreach(glob($filename) as $file) {
                 $LastModified[] = filemtime($file);
                 $FileName[] = $file;
@@ -232,21 +256,34 @@ class telegram extends module {
             header('Content-Type: text/html; charset=utf-8');
             global $user;
             global $text;
-            $this->sendMessageToUser($user,$text);
+            $res = $this->sendMessageToUser($user,$text);
             echo "Ok";
             exit;
         }
         $out['TLG_TOKEN'] = $this->config['TLG_TOKEN'];
         $out['TLG_STORAGE'] = $this->config['TLG_STORAGE'];
         $out['TLG_COUNT_ROW'] = $this->config['TLG_COUNT_ROW'];
+        $out['TLG_TIMEOUT'] = $this->config['TLG_TIMEOUT'];
         if(!$out['TLG_COUNT_ROW'])
             $out['TLG_COUNT_ROW'] = 3;
+        if(!$out['TLG_TIMEOUT'])
+            $out['TLG_TIMEOUT'] = 30;
+        if($out['TLG_TIMEOUT']>600)
+            $out['TLG_TIMEOUT'] = 30;
+        if(!$out['TLG_PROXY_TYPE'])
+            $out['TLG_PROXY_TYPE'] = 2;
         $out['TLG_DEBUG'] = $this->config['TLG_DEBUG'];
         $out['TLG_test'] = $this->data_source . "_" . $this->view_mode . "_" . $this->tab;
         // get webhook info
         $out['TLG_WEBHOOK'] = $this->config['TLG_WEBHOOK'];
         $out['TLG_WEBHOOK_URL'] = $this->config['TLG_WEBHOOK_URL'];
         $out['TLG_WEBHOOK_CERT'] = $this->config['TLG_WEBHOOK_CERT'];
+        
+        $out['TLG_USEPROXY'] = $this->config['TLG_USEPROXY'];
+        $out['TLG_PROXY_TYPE'] = $this->config['TLG_PROXY_TYPE'];
+        $out['TLG_PROXY_URL'] = $this->config['TLG_PROXY_URL'];
+        $out['TLG_PROXY_LOGIN'] = $this->config['TLG_PROXY_LOGIN'];
+        $out['TLG_PROXY_PASSWORD'] = $this->config['TLG_PROXY_PASSWORD'];
         
         if($this->data_source == 'telegram' || $this->data_source == '') {
             if($this->view_mode == 'update_settings') {
@@ -256,6 +293,10 @@ class telegram extends module {
                 $this->config['TLG_STORAGE'] = $tlg_storage;
                 global $tlg_count_row;
                 $this->config['TLG_COUNT_ROW'] = $tlg_count_row;
+                global $tlg_timeout;
+                $this->config['TLG_TIMEOUT'] = $tlg_timeout;
+                if($this->config['TLG_TIMEOUT']>600)
+                    $this->config['TLG_TIMEOUT'] = 30;
                 global $tlg_debug;
                 $this->config['TLG_DEBUG'] = $tlg_debug;
                 global $tlg_webhook;
@@ -264,13 +305,24 @@ class telegram extends module {
                 $this->config['TLG_WEBHOOK_URL'] = $tlg_webhook_url;
                 global $tlg_webhook_cert;
                 $this->config['TLG_WEBHOOK_CERT'] = $tlg_webhook_cert;
+                global $tlg_useproxy;
+                $this->config['TLG_USEPROXY'] = $tlg_useproxy;
+                global $tlg_proxy_type;
+                $this->config['TLG_PROXY_TYPE'] = $tlg_proxy_type;
+                global $tlg_proxy_url;
+                $this->config['TLG_PROXY_URL'] = $tlg_proxy_url;
+                global $tlg_proxy_login;
+                $this->config['TLG_PROXY_LOGIN'] = $tlg_proxy_login;
+                global $tlg_proxy_password;
+                $this->config['TLG_PROXY_PASSWORD'] = $tlg_proxy_password;
                 $this->saveConfig();
+                $this->log("Save config");
                 if (!$this->config['TLG_WEBHOOK'])
                 {
-                    setGlobal('cycle_telegram','restart');
+                    setGlobal('cycle_telegramControl','restart');
                     $this->log("Init cycle restart");
                 }
-                $this->redirect("?");
+                $this->redirect("?tab=".$this->tab);
             }
             if($this->view_mode == 'user_edit') {
                 $this->edit_user($out, $this->id);
@@ -497,8 +549,8 @@ class telegram extends module {
         } else {
             //$option = array( array("A", "B"), array("C", "D") );
             $option = array();
-            $sql = "SELECT *,(select VALUE from pvalues where Property_name=`LINKED_OBJECT`+'.'+`LINKED_PROPERTY` ORDER BY updated DESC limit 1) as pvalue" . " FROM tlg_cmd where ACCESS=3 or ((select count(*) from tlg_user_cmd where tlg_cmd.ID=tlg_user_cmd.CMD_ID and tlg_user_cmd.USER_ID=" . $user['ID'] . ")>0 and ACCESS>0) order by tlg_cmd.PRIORITY desc, tlg_cmd.TITLE;";
-            //$this->debug($sql);
+            $sql = "SELECT * FROM tlg_cmd where ACCESS=3 or ((select count(*) from tlg_user_cmd where tlg_cmd.ID=tlg_user_cmd.CMD_ID and tlg_user_cmd.USER_ID=" . $user['ID'] . ")>0 and ACCESS>0) order by tlg_cmd.PRIORITY desc, tlg_cmd.TITLE;";
+            //$this->log($sql);
             $rec = SQLSelect($sql);
             $total = count($rec);
             if($total) {
@@ -507,14 +559,21 @@ class telegram extends module {
                     if($rec[$i]["SHOW_MODE"] == 1)
                         $view = true;
                     elseif($rec[$i]["SHOW_MODE"] == 3) {
-                        if($rec[$i]["CONDITION"] == 1 && $rec[$i]["pvalue"] == $rec[$i]["CONDITION_VALUE"])
-                            $view = true;
-                        if($rec[$i]["CONDITION"] == 2 && $rec[$i]["pvalue"] > $rec[$i]["CONDITION_VALUE"])
-                            $view = true;
-                        if($rec[$i]["CONDITION"] == 3 && $rec[$i]["pvalue"] < $rec[$i]["CONDITION_VALUE"])
-                            $view = true;
-                        if($rec[$i]["CONDITION"] == 4 && $rec[$i]["pvalue"] <> $rec[$i]["CONDITION_VALUE"])
-                            $view = true;
+                        if ($rec[$i]["LINKED_OBJECT"] && $rec[$i]["LINKED_PROPERTY"])
+                        {
+                            $val = gg($rec[$i]["LINKED_OBJECT"].".".$rec[$i]["LINKED_PROPERTY"]);
+                            if($val!='')
+                            {
+                                if($rec[$i]["CONDITION"] == 1 && $val == $rec[$i]["CONDITION_VALUE"])
+                                    $view = true;
+                                if($rec[$i]["CONDITION"] == 2 && $val > $rec[$i]["CONDITION_VALUE"])
+                                    $view = true;
+                                if($rec[$i]["CONDITION"] == 3 && $val < $rec[$i]["CONDITION_VALUE"])
+                                    $view = true;
+                                if($rec[$i]["CONDITION"] == 4 && $val <> $rec[$i]["CONDITION_VALUE"])
+                                    $view = true;
+                            }
+                        }
                     }
                     if($view)
                         $option[] = $rec[$i]["TITLE"];
@@ -540,7 +599,7 @@ class telegram extends module {
         $this->debug($content);
         $res = $this->telegramBot->endpoint($endpoint, $content);
         $this->debug($res);
-    return $res;
+        return $res;
     }
     
     function sendAnswerCallbackQuery($callback_id, $text, $show_alert = false ) {
@@ -564,13 +623,15 @@ class telegram extends module {
         return "Unknow";
     }
     
-    function editMessage($user_id, $message_id, $message, $keyboard = '') {
+    function editMessage($user_id, $message_id, $message, $keyboard = '', $parse_mode = 'HTML') {
         $content = array(
             'chat_id' => $user_id,
             'message_id' => $message_id,
             'text' => $message,
-            'reply_markup' => $keyboard
+            'reply_markup' => $keyboard,
+            'parse_mode' => $parse_mode
         );
+        $this->debug($content);
         $res = $this->telegramBot->editMessageText($content);
         $this->debug($res);
     return $res;
@@ -605,15 +666,18 @@ class telegram extends module {
     
     // send message
     function sendMessage($user_id, $message, $keyboard = '', $parse_mode = 'HTML') {
-        $content = array(
-            'chat_id' => $user_id,
-            'text' => $message,
-            'reply_markup' => $keyboard,
-            'parse_mode' => $parse_mode
-        );
-        $res = $this->telegramBot->sendMessage($content);
-        $this->debug($res);
-    return $res;
+        $splited = str_split($message, 4096);
+        foreach ($splited as $mess) {
+            $content = array(
+                'chat_id' => $user_id,
+                'text' => $mess,
+                'reply_markup' => $keyboard,
+                'parse_mode' => $parse_mode
+            );
+            $res = $this->telegramBot->sendMessage($content);
+            $this->debug($res);
+        }
+        return $res;
     }
     function sendMessageTo($where, $message, array $key = NULL) {
         $users = $this->getUsers($where);
@@ -625,14 +689,7 @@ class telegram extends module {
             else
                 $keyboard = $this->telegramBot->buildKeyBoard($key, false, true);
             $this->debug($keyboard);
-            $content = array(
-                'chat_id' => $user_id,
-                'text' => $message,
-                'reply_markup' => $keyboard,
-                'parse_mode' => 'HTML'
-            );
-            $res = $this->telegramBot->sendMessage($content);
-            $this->debug($res);
+            $this->sendMessage($user_id,$message,$keyboard,'HTML');
         }
     }
     function sendMessageToUser($user_id, $message, $key = NULL) {
@@ -686,6 +743,106 @@ class telegram extends module {
     function sendImageToAll($image_path, $message = '', $key = NULL) {
         $this->sendImageTo("", $image_path, $message, $key);
     }
+    ///send video
+    function sendVideo($user_id, $video_path, $message = '', $keyboard = '') {
+        $video = curl_file_create($video_path);
+        $content = array(
+            'chat_id' => $user_id,
+            'video' => $video,
+            'caption' => $message,
+            'reply_markup' => $keyboard
+        );
+        $res = $this->telegramBot->sendVideo($content);
+        $this->debug($res);
+    return $res;
+    }
+    function sendVideoTo($where, $video_path, $message = '', array $key = NULL) {
+        $video = curl_file_create($video_path);
+        $users = $this->getUsers($where);
+        foreach($users as $user) {
+            $user_id = $user['USER_ID'];
+            if ($user_id === '0') $user_id = $user['NAME'];
+            if($key == NULL)
+                $keyboard = $this->getKeyb($user);
+            else
+                $keyboard = $this->telegramBot->buildKeyBoard($key, false, true);
+            $content = array(
+                'chat_id' => $user_id,
+                'video' => $video,
+                'caption' => $message,
+                'reply_markup' => $keyboard
+            );
+            $res = $this->telegramBot->sendVideo($content);
+            $this->debug($res);
+        }
+    }
+    function sendVideoToUser($user_id, $video_path, $message = '', $key = NULL) {
+        $this->sendVideoTo('(USER_ID="' . DBSafe($user_id) . '" OR NAME LIKE "' . DBSafe($user_id) .  '")', $video_path, $message, $key);
+    }
+    function sendVideoToAdmin($video_path, $message = '', $key = NULL) {
+        $this->sendVideoTo("ADMIN=1", $video_path, $message, $key);
+    }
+    function sendVideoToAll($video_path, $message = '', $key = NULL) {
+        $this->sendVideoTo("", $video_path, $message, $key);
+    }
+    ///send album
+    function sendAlbum($user_id, $image_paths, $message = '', $keyboard = '') {
+        if (count($image_paths) == 1)
+        {
+            $this->sendImage($user_id, $image_paths[0], $message, $keyboard);
+            return;
+        }
+        $photos = array();
+        $content = array(
+            'chat_id' => $user_id
+        );
+        foreach($image_paths as $image) {
+            $img = curl_file_create($image, 'image/png');
+            $photo = array();
+            $photo['caption'] = $message;
+            $photo['type'] = 'photo';
+            $photo['parse_mode'] = 'HTML';
+            $photo['media'] = 'attach://'.basename($image);//$img;
+            $photos[]=$photo;
+            $content[basename($image)]=$img;
+        }
+        $content['media'] = json_encode($photos,true);
+        $res = $this->telegramBot->sendMediaGroup($content);
+        $this->debug($res);
+        return $res;
+    }
+    function sendAlbumTo($where, $image_paths, $message = '', array $key = NULL) {
+        $photos = array();
+        $content = array();
+        foreach($image_paths as $image) {
+            $img = curl_file_create($image, 'image/png');
+            $photo = array();
+            $photo['caption'] = $message;
+            $photo['type'] = 'photo';
+            $photo['parse_mode'] = 'HTML';
+            $photo['media'] = 'attach://'.basename($image);
+            $photos[]=$photo;
+            $content[basename($image)]=$img;
+        }
+        $content['media'] = json_encode($photos,true);
+        $users = $this->getUsers($where);
+        foreach($users as $user) {
+            $user_id = $user['USER_ID'];
+            $content['chat_id'] = $user_id;
+            $res = $this->telegramBot->sendMediaGroup($content);
+            $this->debug($res);
+        }
+    }
+    function sendAlbumToUser($user_id, $image_paths, $message = '', $key = NULL) {
+        $this->sendAlbumTo('(USER_ID="' . DBSafe($user_id) . '" OR NAME LIKE "' . DBSafe($user_id) .  '")', $image_paths, $message, $key);
+    }
+    function sendAlbumToAdmin($image_paths, $message = '', $key = NULL) {
+        $this->sendAlbumTo("ADMIN=1", $image_paths, $message, $key);
+    }
+    function sendAlbumToAll($image_paths, $message = '', $key = NULL) {
+        $this->sendAlbumTo("", $image_paths, $message, $key);
+    }
+    //
     function sendFile($user_id, $file_path, $message = '', $keyboard = '') {
         $file = curl_file_create($file_path);
         $content = array(
@@ -942,11 +1099,12 @@ class telegram extends module {
             $this->debug($image);
             $file = $this->telegramBot->getFile($image);
             $this->debug($file);
-            $file_path = ROOT . "cached" . DIRECTORY_SEPARATOR . "telegram" . DIRECTORY_SEPARATOR . $user['USER_ID'] . ".jpg";
+            $file_path = ROOT . "cms/cached" . DIRECTORY_SEPARATOR . "telegram" . DIRECTORY_SEPARATOR . $user['USER_ID'] . ".jpg";
             $path_parts = pathinfo($file_path);
             if(!is_dir($path_parts['dirname']))
                 mkdir($path_parts['dirname'], 0777, true);
-            $this->telegramBot->downloadFile($file["result"]["file_path"], $file_path);
+            $res = $this->telegramBot->downloadFile($file["result"]["file_path"], $file_path);
+            $this->debug($res);
         }
     }
     
@@ -955,7 +1113,18 @@ class telegram extends module {
         if ($this->config['TLG_WEBHOOK'])
             return;
         // Get all the new updates and set the new correct update_id
-        $req = $this->telegramBot->getUpdates($timeout = 5);
+        if ($this->config['TLG_USEPROXY'])
+        {
+            $type_proxy = CURLPROXY_SOCKS5;
+            if ($this->config['TLG_PROXY_TYPE']==1)
+                $type_proxy = CURLPROXY_HTTP;
+            if ($this->config['TLG_PROXY_TYPE']==3)
+                $type_proxy = CURLPROXY_SOCKS5_HOSTNAME;
+            if ($this->config['TLG_PROXY_TYPE']==4)
+                $type_proxy = CURLPROXY_HTTPS;
+            $this->telegramBot->setProxy($this->config['TLG_PROXY_URL'],$this->config['TLG_PROXY_LOGIN'].':'.$this->config['TLG_PROXY_PASSWORD'], $type_proxy);
+        }
+        $req = $this->telegramBot->getUpdates($this->last_update_id, 10, $this->config["TLG_TIMEOUT"], false);
         if(isset($req['error_code']))
         {
             if($this->config['TLG_DEBUG'])
@@ -967,12 +1136,29 @@ class telegram extends module {
         for($i = 0; $i < $this->telegramBot->UpdateCount(); $i++) {
             // You NEED to call serveUpdate before accessing the values of message in Telegram Class
             $this->telegramBot->serveUpdate($i);
-            $this->processMessage();
+            //$this->processMessage();
+            $data = $this->telegramBot->getData();
+            $this->last_update_id = $data['update_id']+1;
+            $url = BASE_URL . '/webhook_telegram.php';
+            $data_string = json_encode($data);
+            $ch=curl_init($url);
+            curl_setopt_array($ch, array(
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $data_string,
+                CURLOPT_HEADER => true,
+                CURLOPT_HTTPHEADER => array('Content-Type:application/json', 'Content-Length: ' . strlen($data_string)))
+            );
+            curl_setopt($ch, CURLOPT_NOSIGNAL, 1);
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 100);
+
+            $result = curl_exec($ch);
+            curl_close($ch);
         }
     }
     function processMessage() {
         $skip = false;
         $data = $this->telegramBot->getData();
+        echo $data;
         $this->debug($data);
         $bot_name = $this->config['TLG_BOTNAME'];
         $text = $this->telegramBot->Text();
@@ -1028,6 +1214,24 @@ class telegram extends module {
             return;
         }
         
+        if ($user['ADMIN'] != 1 && 
+            $user['HISTORY'] != 1 && 
+            $user['CMD'] != 1 && 
+            $user['PATTERNS'] != 1 && 
+            $user['DOWNLOAD'] != 1 && 
+            $user['PLAY'] != 1)
+        {
+            $this->log("WARNING!!! Permission denied!! User: ".$chat_id."; Message: ".$text);
+            $reply = "Обратитесь к администратору для получения доступа к функциям!";
+            $content = array(
+                'chat_id' => $chat_id,
+                'text' => $reply
+            );
+            $this->sendContent($content);
+            return;
+        }
+        
+        
         $document = $data["message"]["document"];
         $audio = $data["message"]["audio"];
         $video = $data["message"]["video"];
@@ -1035,7 +1239,7 @@ class telegram extends module {
         $sticker = $data["message"]["sticker"];
         $photo_id = $this->PhotoIdBigSize($data);
         $location = $this->telegramBot->Location();
-        if($callback) {
+        if($callback && $user['CMD'] == 1) {
             $cbm = $this->telegramBot->Callback_Message();
             $message_id = $cbm["message_id"];
             $callback_id = $this->telegramBot->Callback_ID();
@@ -1092,8 +1296,8 @@ class telegram extends module {
                 }
                 return;
         }
-            //permission download file
-            if($user['DOWNLOAD'] == 1) {
+        //permission download file
+        if($user['DOWNLOAD'] == 1) {
                 $type = 0;
                 //папку с файлами в настройках
                 $storage = $this->config['TLG_STORAGE'] . DIRECTORY_SEPARATOR;
@@ -1149,7 +1353,8 @@ class telegram extends module {
                 if($sticker) {
                     $file = $this->telegramBot->getFile($sticker["file_id"]);
                     $this->debug($file);
-                    $this->log("Get sticker from " . $chat_id . " - " . $sticker["file_id"]);
+                    $sticker_set = $sticker["set_name"];
+                    $this->log("Get sticker from " . $chat_id . " === Id:" . $sticker["file_id"] ." Set:".$sticker_set);
                     $file_path = $storage.'stickers'.DIRECTORY_SEPARATOR.$file["result"]["file_path"];
                     $sticker_id = $sticker["file_id"];
                     $type = 7;
@@ -1159,7 +1364,8 @@ class telegram extends module {
                     $path_parts = pathinfo($file_path);
                     if(!is_dir($path_parts['dirname']))
                         mkdir($path_parts['dirname'], 0777, true);
-                    $this->telegramBot->downloadFile($file["result"]["file_path"], $file_path);
+                    $res = $this->telegramBot->downloadFile($file["result"]["file_path"], $file_path);
+                    $this->debug($res);
                 }
                 if($voice && $user['PLAY'] == 1) {
                     //проиграть голосовое сообщение
@@ -1187,12 +1393,14 @@ class telegram extends module {
                     }
                 }
                 $file_path = "";
-            }
-            if($text == "") {
-                return;
-            }
-            $this->log($chat_id . " (" . $username . ", " . $fullname . ")=" . $text);
-            // get events for text message
+        }
+        if($text == "") {
+            return;
+        }
+        $this->log($chat_id . " (" . $username . ", " . $fullname . ")=" . $text);
+
+        if($user['CMD'] == 1) {
+        // get events for text message
             $events = SQLSelect("SELECT * FROM tlg_event WHERE TYPE_EVENT=1 and ENABLE=1;");
             foreach($events as $event) {
                 if($event['CODE']) {
@@ -1214,13 +1422,21 @@ class telegram extends module {
                 $this->log("Skip next processing message");
                 return;
             }
+        }
             
-            if($user['ID']) {
-                //смотрим разрешения на обработку команд
-                if($user['CMD'] == 1) {
-                    $sql = "SELECT * FROM tlg_cmd where '" . DBSafe($text) . "' LIKE CONCAT(tlg_cmd.TITLE,'%') and (ACCESS=3  OR ((select count(*) from tlg_user_cmd where tlg_user_cmd.USER_ID=" . $user['ID'] . " and tlg_cmd.ID=tlg_user_cmd.CMD_ID)>0 and ACCESS>0))";
-                    //$this->debug($sql);
+        if($user['ID']) {
+            //смотрим разрешения на обработку команд
+            if($user['CMD'] == 1) {
+                    // поиск полного соответствия команды
+                    $sql = "SELECT * FROM tlg_cmd where tlg_cmd.TITLE='" . DBSafe($text) . "' and (ACCESS=3  OR ((select count(*) from tlg_user_cmd where tlg_user_cmd.USER_ID=" . $user['ID'] . " and tlg_cmd.ID=tlg_user_cmd.CMD_ID)>0 and ACCESS>0))";
                     $cmd = SQLSelectOne($sql);
+                    if (count($cmd) == 0)
+                    {
+                        // поиск команд с параметрами
+                        $sql = "SELECT * FROM tlg_cmd where '" . DBSafe($text) . "' LIKE CONCAT(tlg_cmd.TITLE,'%') and (ACCESS=3  OR ((select count(*) from tlg_user_cmd where tlg_user_cmd.USER_ID=" . $user['ID'] . " and tlg_cmd.ID=tlg_user_cmd.CMD_ID)>0 and ACCESS>0))";
+                        //$this->debug($sql);
+                        $cmd = SQLSelectOne($sql);
+                    }
                     if($cmd['ID']) {
                         $this->log("Find command");
                         //нашли команду
@@ -1317,8 +1533,6 @@ class telegram extends module {
             } elseif($details['source']) {
                 $destination = $details['source'];
             }
-            $me = $this->telegramBot->getMe();
-            $bot_name = $me["result"]["username"];
             $users = SQLSelect("SELECT * FROM tlg_user WHERE HISTORY=1;");
             $c_users = count($users);
             if($c_users) {
@@ -1330,14 +1544,8 @@ class telegram extends module {
                     }
                     if($destination == 'telegram' . $users[$j]['ID'] || (!$destination && ($level >= $users[$j]['HISTORY_LEVEL']))) {
                         $this->log(" Send to " . $user_id . " - " . $reply);
-                        $keyb = $this->getKeyb($users[$j]);
-                        $content = array(
-                            'chat_id' => $user_id,
-                            'text' => $reply,
-                            'reply_markup' => $keyb,
-                            'parse_mode' => 'HTML'
-                        );
-                        $this->sendContent($content);
+                        $url=BASE_URL."/ajax/telegram.html?sendMessage=1&user=".$user_id."&text=".urlencode($reply);
+                        getURLBackground($url,0);
                     }
                 }
                 $this->debug("Sended - " . $reply);

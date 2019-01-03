@@ -28,7 +28,7 @@ while (1)
       $db->Disconnect();
       exit;
    }
-   sleep(3);
+   sleep(1);
 }
 DebMes("Unexpected close of cycle: " . basename(__FILE__));
  

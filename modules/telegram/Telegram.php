@@ -63,6 +63,9 @@ class TelegramBot
     private $bot_token = '';
     private $data = [];
     private $updates = [];
+    private $proxy = '';
+    private $proxypwd='';
+    private $proxytype=CURLPROXY_SOCKS5;
 
     /// Class constructor
 
@@ -71,10 +74,18 @@ class TelegramBot
      * \param $bot_token the bot token
      * \return an instance of the class.
      */
-    public function __construct($bot_token)
+    public function __construct($bot_token, $proxyUrl = '', $proxyPwd = '', $proxyType = CURLPROXY_SOCKS5)
     {
         $this->bot_token = $bot_token;
+        $this->setProxy($proxyUrl,$proxyPwd,$proxyType);
         $this->data = $this->getData();
+    }
+    
+    public function setProxy( $proxyUrl = '', $proxyPwd = '', $proxyType = CURLPROXY_SOCKS5)
+    {
+        $this->proxy = $proxyUrl;
+        $this->proxypwd = $proxyPwd;
+        $this->proxytype = $proxyType;
     }
 
     /// Do requests to Telegram Bot API
@@ -94,7 +105,6 @@ class TelegramBot
         } else {
             $reply = $this->sendAPIRequest($url, [], false);
         }
-
         return json_decode($reply, true);
     }
 
@@ -125,7 +135,7 @@ class TelegramBot
     /// Send a message
 
     /**
-     * Contacts the various API's endpoints<br/>Values inside $content:<br/>
+     * Use this method to send text messages.<br/>Values inside $content:<br/>
      * <table>
      * <tr>
      * <td><strong>Parameters</strong></td>
@@ -137,7 +147,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * * </tr>
      * <tr>
      * <td>text</td>
@@ -165,7 +175,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -193,13 +203,19 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>from_chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the chat where the original message was sent — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
+     * </tr>
+     * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
      * </tr>
      * <tr>
      * <td>message_id</td>
@@ -231,13 +247,13 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>photo</td>
      * <td><a href="https://core.telegram.org/bots/api#inputfile">InputFile</a> or String</td>
      * <td>Yes</td>
-     * <td>Photo to send. You can either pass a <em>file_id</em> as String to resend a photo that is already on the Telegram servers, or upload a new photo using multipart/form-data.</td>
+     * <td>Photo to send. Pass a file_id as String to send a photo that exists on the Telegram servers (recommended), pass an HTTP URL as a String for Telegram to get a photo from the Internet, or upload a new photo using multipart/form-data.</td>
      * </tr>
      * <tr>
      * <td>caption</td>
@@ -252,8 +268,14 @@ class TelegramBot
      * <td>If the message is a reply, ID of the original message</td>
      * </tr>
      * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
+     * </tr>
+     * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or >ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -270,8 +292,7 @@ class TelegramBot
 
     /**
      * Use this method to send audio files, if you want Telegram clients to display them in the music player. Your audio must be in the .mp3 format. On success, the sent Message is returned. Bots can currently send audio files of up to 50 MB in size, this limit may be changed in the future.
-     *
-     * For backward compatibility, when the fields title and performer are both empty and the mime-type of the file to be sent is not audio/mpeg, the file will be sent as a playable voice message. For this to work, the audio must be in an .ogg file encoded with OPUS. This behavior will be phased out in the future. For sending voice messages, use the sendVoice method instead.<br/>Values inside $content:<br/>
+     * For sending voice messages, use the sendVoice method instead.<br/>Values inside $content:<br/>
      * <table>
      * <tr>
      * <td><strong>Parameters</strong></td>
@@ -283,13 +304,13 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>audio</td>
      * <td><a href="https://core.telegram.org/bots/api#inputfile">InputFile</a> or String</td>
      * <td>Yes</td>
-     * <td>Audio file to send. You can either pass a <em>file_id</em> as String to resend an audio that is already on the Telegram servers, or upload a new audio file using <strong>multipart/form-data</strong>.</td>
+     * <td>Audio file to send. Pass a file_id as String to send an audio file that exists on the Telegram servers (recommended), pass an HTTP URL as a String for Telegram to get an audio file from the Internet, or upload a new one using <strong>multipart/form-data</strong>.</td>
      * </tr>
      * <tr>
      * <td>duration</td>
@@ -310,6 +331,12 @@ class TelegramBot
      * <td>Track name</td>
      * </tr>
      * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
+     * </tr>
+     * <tr>
      * <td>reply_to_message_id</td>
      * <td>Integer</td>
      * <td>Optional</td>
@@ -317,7 +344,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -345,13 +372,25 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>document</td>
      * <td>InputFile or String</td>
      * <td>Yes</td>
-     * <td>File to send. You can either pass a <em>file_id</em> as String to resend a file that is already on the Telegram servers, or upload a new file using <strong>multipart/form-data</strong>.</td>
+     * <td>File to send. Pass a file_id as String to send a file that exists on the Telegram servers (recommended), pass an HTTP URL as a String for Telegram to get a file from the Internet, or upload a new one using <strong>multipart/form-data</strong>.</td>
+     * </tr>
+     * <tr>
+     * <td>caption</td>
+     * <td>String</td>
+     * <td>Optional</td>
+     * <td>Document caption (may also be used when resending documents by file_id), 0-200 characters.</td>
+     * </tr>
+     * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
      * </tr>
      * <tr>
      * <td>reply_to_message_id</td>
@@ -361,7 +400,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -439,7 +478,7 @@ class TelegramBot
      * <td>video</td>
      * <td><a href="https://core.telegram.org/bots/api#inputfile">InputFile</a> or String</td>
      * <td>Yes</td>
-     * <td>Video to send. You can either pass a <em>file_id</em> as String to resend a video that is already on the Telegram servers, or upload a new video file using <strong>multipart/form-data</strong>.</td>
+     * <td>Video to send. Pass a file_id as String to send a video that exists on the Telegram servers (recommended), pass an HTTP URL as a String for Telegram to get a video from the Internet, or upload a new video using <strong>multipart/form-data</strong>.</td>
      * </tr>
      * <tr>
      * <td>duration</td>
@@ -448,10 +487,28 @@ class TelegramBot
      * <td>Duration of sent video in seconds</td>
      * </tr>
      * <tr>
+     * <td>width</td>
+     * <td>Integer</td>
+     * <td>Optional</td>
+     * <td>Video width</td>
+     * </tr>
+     * <tr>
+     * <td>height</td>
+     * <td>Integer</td>
+     * <td>Optional</td>
+     * <td>Video height</td>
+     * </tr>
+     * <tr>
      * <td>caption</td>
      * <td>String</td>
      * <td>Optional</td>
      * <td>Video caption (may also be used when resending videos by <em>file_id</em>).</td>
+     * </tr>
+     * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
      * </tr>
      * <tr>
      * <td>reply_to_message_id</td>
@@ -461,7 +518,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -489,19 +546,31 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>voice</td>
      * <td><a href="https://core.telegram.org/bots/api#inputfile">InputFile</a> or String</td>
      * <td>Yes</td>
-     * <td>Audio file to send. You can either pass a <em>file_id</em> as String to resend an audio that is already on the Telegram servers, or upload a new audio file using <strong>multipart/form-data</strong>.</td>
+     * <td>Audio file to send. Pass a file_id as String to send a file that exists on the Telegram servers (recommended), pass an HTTP URL as a String for Telegram to get a file from the Internet, or upload a new one using <strong>multipart/form-data</strong>.</td>
+     * </tr>
+     * <tr>
+     * <td>caption</td>
+     * <td>String</td>
+     * <td>Optional</td>
+     * <td>Voice message caption, 0-200 characters</td>
      * </tr>
      * <tr>
      * <td>duration</td>
      * <td>Integer</td>
      * <td>Optional</td>
      * <td>Duration of sent audio in seconds</td>
+     * </tr>
+     * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
      * </tr>
      * <tr>
      * <td>reply_to_message_id</td>
@@ -511,7 +580,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup</a> or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -539,7 +608,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the message recipient — User or GroupChat id</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>latitude</td>
@@ -554,6 +623,12 @@ class TelegramBot
      * <td>Longitude of location</td>
      * </tr>
      * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the message silently. Users will receive a notification with no sound.</td>
+     * </tr>
+     * <tr>
      * <td>reply_to_message_id</td>
      * <td>Integer</td>
      * <td>Optional</td>
@@ -561,7 +636,7 @@ class TelegramBot
      * </tr>
      * <tr>
      * <td>reply_markup</td>
-     * <td>ReplyKeyboardMarkup or ReplyKeyboardHide or ForceReply</td>
+     * <td>InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove or ForceReply</td>
      * <td>Optional</td>
      * <td>Additional interface options. A JSON-serialized object for a custom reply keyboard, instructions to hide keyboard or to force a reply from the user.</td>
      * </tr>
@@ -573,7 +648,50 @@ class TelegramBot
     {
         return $this->endpoint('sendLocation', $content);
     }
-
+    
+    /// Send Media Group
+    /**
+     * Use this method to send a group of photos or videos as an album. On success, an array of the sent <a href="https://core.telegram.org/bots/api#message">Messages</a> is returned.<br/>Values inside $content:<br/>
+     * <table>
+     * <tr>
+     * <td><strong>Parameters</strong></td>
+     * <td><strong>Type</strong></td>
+     * <td><strong>Required</strong></td>
+     * <td><strong>Description</strong></td>
+     * </tr>
+     * <tr>
+     * <td>chat_id</td>
+     * <td>Integer or String</td>
+     * <td>Yes</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
+     * </tr>
+     * <tr>
+     * <td>media</td>
+     * <td>Array of <a href="https://core.telegram.org/bots/api#inputmedia">InputMedia</a></td>
+     * <td>Yes</td>
+     * <td>A JSON-serialized array describing photos and videos to be sent, must include 2–10 items</td>
+     * </tr>
+     * <tr>
+     * <td>disable_notification</td>
+     * <td>Boolean</td>
+     * <td>Optional</td>
+     * <td>Sends the messages <a href="https://telegram.org/blog/channels-2-0#silent-messages">silently</a>. Users will receive a notification with no sound.</td>
+     * </tr>
+     * <tr>
+     * <td>reply_to_message_id</td>
+     * <td>Integer</td>
+     * <td>Optional</td>
+     * <td>If the messages are a reply, ID of the original message</td>
+     * </tr>
+     * </table>
+     * \param $content the request parameters as array
+     * \return the JSON Telegram's reply.
+     */
+    public function sendMediaGroup(array $content)
+    {
+        return $this->endpoint('sendMediaGroup', $content);
+    }
+    
     /// Send Venue
 
     /**
@@ -589,7 +707,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>latitude</td>
@@ -661,7 +779,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>phone_number</td>
@@ -800,9 +918,8 @@ class TelegramBot
 
     /**
      * Use this method to kick a user from a group or a supergroup. In the case of supergroups, the user will not be able to return to the group on their own using invite links, etc., unless <a href="https://core.telegram.org/bots/api#unbanchatmember">unbanned</a> first. The bot must be an administrator in the group for this to work. Returns <em>True</em> on success.<br>
-     * Note: This will method only work if the â€˜All Members Are Adminsâ€™ setting is off in the target group. Otherwise members may only be removed by the group&#39;s creator or by the member that added them.<br/>Values inside $content:<br/>
+     * Note: This will method only work if the \˜All Members Are Admins\' setting is off in the target group. Otherwise members may only be removed by the group&#39;s creator or by the member that added them.<br/>Values inside $content:<br/>
      * <table>
-     * <tbody>
      * <tr>
      * <td><strong>Parameters</strong></td>
      * <td><strong>Type</strong></td>
@@ -813,7 +930,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target group or username of the target supergroup (in the format <code>@supergroupusername</code>)</td>
+     * <td>Unique identifier for the target group or username of the target supergroup (in the format \c \@supergroupusername)</td>
      * </tr>
      * <tr>
      * <td>user_id</td>
@@ -845,7 +962,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -903,7 +1020,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -927,7 +1044,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -951,7 +1068,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -975,7 +1092,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target supergroup or channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>user_id</td>
@@ -1165,7 +1282,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>No</td>
-     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>message_id</td>
@@ -1225,7 +1342,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>No</td>
-     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>message_id</td>
@@ -1273,7 +1390,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>No</td>
-     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Required if <em>inline_message_id</em> is not specified. Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>message_id</td>
@@ -1312,14 +1429,37 @@ class TelegramBot
     public function downloadFile($telegram_file_path, $local_file_path)
     {
         $file_url = 'https://api.telegram.org/file/bot'.$this->bot_token.'/'.$telegram_file_path;
-        $in = fopen($file_url, 'rb');
-        $out = fopen($local_file_path, 'wb');
-
-        while ($chunk = fread($in, 8192)) {
-            fwrite($out, $chunk, 8192);
+        
+        $fp = fopen ($local_file_path, 'w+');
+         
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $file_url);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 50);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	
+        if ($this->proxy!= '')
+        {
+            curl_setopt($ch, CURLOPT_PROXYTYPE, $this->proxytype);
+            curl_setopt($ch, CURLOPT_PROXY, $this->proxy);
+            curl_setopt($ch, CURLOPT_PROXYUSERPWD, $this->proxypwd);
         }
-        fclose($in);
-        fclose($out);
+                
+        curl_setopt($ch, CURLOPT_FILE, $fp);
+        $result = curl_exec($ch);
+        if ($result === false) {
+            $result = json_encode(['ok'=>false, 'curl_error_code' => curl_errno($ch), 'curl_error' => curl_error($ch)]);
+        }
+        curl_close($ch);
+        fclose($fp);
+        if (class_exists('TelegramErrorLogger')) {
+            $loggerArray = ($this->getData() == null) ? [$content] : [$this->getData(), $content];
+            TelegramErrorLogger::log(json_decode($result, true), $loggerArray);
+        }
+
+        return $result;
     }
 
     /// Set a WebHook for the bot
@@ -1390,6 +1530,9 @@ class TelegramBot
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['text'];
         }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['text'];
+        }
 
         return @$this->data['message']['text'];
     }
@@ -1413,6 +1556,9 @@ class TelegramBot
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['chat']['id'];
         }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['chat']['id'];
+        }
 
         return $this->data['message']['chat']['id'];
     }
@@ -1430,6 +1576,9 @@ class TelegramBot
         }
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['message_id'];
+        }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['message_id'];
         }
 
         return $this->data['message']['message_id'];
@@ -1537,6 +1686,9 @@ class TelegramBot
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['from']['first_name'];
         }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['from']['first_name'];
+        }
 
         return @$this->data['message']['from']['first_name'];
     }
@@ -1550,6 +1702,9 @@ class TelegramBot
         }
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['from']['last_name'];
+        }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['from']['last_name'];
         }
 
         return @$this->data['message']['from']['last_name'];
@@ -1565,6 +1720,9 @@ class TelegramBot
         if ($type == self::CHANNEL_POST) {
             return @$this->data['channel_post']['from']['username'];
         }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['from']['username'];
+        }
 
         return @$this->data['message']['from']['username'];
     }
@@ -1572,6 +1730,17 @@ class TelegramBot
     /// Get the location in the message
     public function Location()
     {
+        $type = $this->getUpdateType();
+        if ($type == self::CALLBACK_QUERY) {
+            return @$this->data['callback_query']['location'];
+        }
+        if ($type == self::CHANNEL_POST) {
+            return @$this->data['channel_post']['location'];
+        }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['location'];
+        }
+
         return $this->data['message']['location'];
     }
 
@@ -1596,6 +1765,9 @@ class TelegramBot
         }
         if ($type == self::CHANNEL_POST) {
             return $this->data['channel_post']['from']['id'];
+        }
+        if ($type == self::EDITED_MESSAGE) {
+            return @$this->data['edited_message']['from']['id'];
         }
 
         return $this->data['message']['from']['id'];
@@ -2001,7 +2173,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>video_note</td>
@@ -2062,7 +2234,7 @@ class TelegramBot
      * <tr>
      * <td>chat_id</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>photo</td>
@@ -2118,7 +2290,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>user_id</td>
@@ -2198,7 +2370,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -2224,7 +2396,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>photo</td>
@@ -2256,7 +2428,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * </table>
      * \param $content the request parameters as array
@@ -2282,7 +2454,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>title</td>
@@ -2314,7 +2486,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>description</td>
@@ -2638,7 +2810,7 @@ class TelegramBot
      * <td>chat_id</td>
      * <td>Integer or String</td>
      * <td>Yes</td>
-     * <td>Unique identifier for the target chat or username of the target channel (in the format <code>@channelusername</code>)</td>
+     * <td>Unique identifier for the target chat or username of the target channel (in the format \c \@channelusername)</td>
      * </tr>
      * <tr>
      * <td>message_id</td>
@@ -2749,18 +2921,28 @@ class TelegramBot
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_HEADER, false);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         if ($post) {
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $content);
         }
+        if ($this->proxy!= '')
+        {
+            curl_setopt($ch, CURLOPT_PROXYTYPE, $this->proxytype);
+            curl_setopt($ch, CURLOPT_PROXY, $this->proxy);
+            curl_setopt($ch, CURLOPT_PROXYUSERPWD, $this->proxypwd);
+        }
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        
         $result = curl_exec($ch);
         if ($result === false) {
             $result = json_encode(['ok'=>false, 'curl_error_code' => curl_errno($ch), 'curl_error' => curl_error($ch)]);
         }
         curl_close($ch);
         if (class_exists('TelegramErrorLogger')) {
-            TelegramErrorLogger::log(json_decode($result, true), [$this->getData(), $content]);
+            $loggerArray = ($this->getData() == null) ? [$content] : [$this->getData(), $content];
+            TelegramErrorLogger::log(json_decode($result, true), $loggerArray);
         }
 
         return $result;
